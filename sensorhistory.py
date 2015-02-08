@@ -97,6 +97,7 @@ class SensorHistories:
         for history in self.sensorhistories:
             s += history.__str__()
         return s
+
 ####### store sensor data and array of histories per sensor
 class SensorHistory:
   sensornum = 0                # the ID for this set of data

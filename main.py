@@ -4,6 +4,7 @@ import serial
 from xbee import xbee
 import sensorhistory
 import optparse
+from datetime import datetime
 from time import sleep, localtime, strftime
 
 API_KEY = "SBK6PW8UFZQ81MZR" #API Key for ThingSpeak
@@ -17,7 +18,7 @@ SERIALPORT = "/dev/cu.usbserial-FTXKEMPL" #USB Serial port -> XBEE
 BAUDRATE = 9600
 CURRENTSENSE = 4
 VOLTSENSE = 0
-MAINSVPP = 680 * 2 #2*sqrt(2)*240 (RMS->VPP)
+MAINSVPP = 324 * 2 #sqrt(2)*230 (RMS->VPP)
 vrefcalibration = [492,  #Voltage
                    480,  #Current
                    489,  #2
@@ -25,8 +26,7 @@ vrefcalibration = [492,  #Voltage
                    501,  #4
                    493]  #etc
 CURRENTNORM = 15.5  # Amperes -> ADC
-NUMWATTDATASAMPLES = 1800 # how many samples to watch in the plot window, 1 hr @ 2s samples
-MAXWATTLISTLEN = 200
+
 
 # open up the FTDI serial port to get data transmitted to xbee
 ser = serial.Serial(SERIALPORT, BAUDRATE)
@@ -91,7 +91,7 @@ def update_graph(idleevent):
         else:
             ampdata[i] -= vrefcalibration[0]
 
-    ampdata[i] /= CURRENTNORM
+        ampdata[i] /= CURRENTNORM
 
     print "Voltage: ", voltagedata
     print "Current: ", ampdata
@@ -108,7 +108,7 @@ def update_graph(idleevent):
 
     for i in range(17):
         avgamp += abs(ampdata[i])
-        avgamp /= 17.0
+    avgamp /= 17.0
 
 #sum power over 1/50Hz
     avgwatt = 0
@@ -117,23 +117,27 @@ def update_graph(idleevent):
 
     for i in range(17):
         avgwatt += abs(wattdata[i])
-        avgwatt /= 17.0
+    avgwatt /= 17.0
+        
+    if (avgamp > 13):
+        return
 
-        sensorhistory = sensorhistories.find(xb.address_16)
-        print sensorhistory
+    sensorhistory = sensorhistories.find(xb.address_16)
+    print sensorhistory
 
-        elapsedseconds = time.time() - sensorhistory.lasttime
-        dwatthr = (avgwatt * elapsedseconds) / (60.0 * 60.0)  # 60 seconds in 60 minutes = 1 hr
-        sensorhistory.lasttime = time.time()
-        print "\t\tWh used in last ",elapsedseconds," seconds: ",dwatthr
-        sensorhistory.addwatthr(dwatthr)
+    elapsedseconds = time.time() - sensorhistory.lasttime
+    dwatthr = (avgwatt * elapsedseconds) / (60.0 * 60.0)  # 60 seconds in 60 minutes = 1 hr
+    sensorhistory.lasttime = time.time()
+    print "\t\tWh used in last ",elapsedseconds," seconds: ",dwatthr
+    sensorhistory.addwatthr(dwatthr)
 
 # Determine the minute of the hour (ie 6:42 -> '42')
     currminute = (int(time.time())/60) % 10
+    currentSecond= datetime.now().second
 
-    if (((time.time() - sensorhistory.fiveminutetimer) >= 60.0)
-        and (currminute % 5 == 0)
-        ):
+    print currentSecond
+
+    if (currentSecond == 30) or (currentSecond == 29) or (currentSecond == 0) or (currentSecond == 1):
         wattsused = 0
         whused = 0
         for history in sensorhistories.sensorhistories:
@@ -141,7 +145,7 @@ def update_graph(idleevent):
                 whused += history.dayswatthr
         
         kwhused = whused/1000
-        avgwatt = sensorhistory.avgwattover5min()
+        avgwatt = (sensorhistory.avgwattover5min()-5.6)
         cost = kwhused * ENERGY_PRICE
         cost = "%.2f" % cost
 
@@ -157,8 +161,7 @@ def update_graph(idleevent):
             conn.close()
         except:
             print "connection failed"
-        
-        sensorhistory.reset5mintimer()
+
 
 
 # Print out debug data, Wh used in last 5 minutes
@@ -172,6 +175,8 @@ def update_graph(idleevent):
                         str(sensorhistory.sensornum)+", "+
                         str(sensorhistory.avgwattover5min())+"\n")
             logfile.flush()
+
+        sensorhistory.reset5mintimer()
 
 if __name__ == "__main__":
      while True:
