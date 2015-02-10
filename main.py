@@ -18,18 +18,19 @@ SERIALPORT = "/dev/cu.usbserial-FTXKEMPL" #USB Serial port -> XBEE
 BAUDRATE = 9600
 CURRENTSENSE = 4
 VOLTSENSE = 0
-MAINSVPP = 324 * 2 #sqrt(2)*230 (RMS->VPP)
-vrefcalibration = [492,  #Voltage
+MAINSVPP = 325 * 2 #sqrt(2)*230 (RMS->VPP)
+vrefcalibration = [494,  #Voltage
                    480,  #Current
                    489,  #2
                    492,  #3
                    501,  #4
                    493]  #etc
-CURRENTNORM = 15.5  # Amperes -> ADC
+CURRENTNORM = 15.5  # Amperes <- ADC
 
 
 # open up the FTDI serial port to get data transmitted to xbee
 ser = serial.Serial(SERIALPORT, BAUDRATE)
+ser.open()
 
 # open our datalogging file
 logfile = None
@@ -45,7 +46,7 @@ sensorhistories = sensorhistory.SensorHistories(logfile)
 print sensorhistories
 
 def update_graph(idleevent):
-    global avgwattdataidx, sensorhistories, DEBUG
+    global avgwattdataidx, sensorhistories
 
 #get one packet from the xbee or timeout
     packet = xbee.find_packet(ser)
@@ -53,20 +54,21 @@ def update_graph(idleevent):
         return #timeout
 
     xb = xbee(packet) #parse
-    print xb.address_16
+    #print xb.address_16
 
 #n-1 samples as first one is not correct
     voltagedata = [-1] * (len(xb.analog_samples) - 1)
-    ampdata = [-1] * (len(xb.analog_samples) -1)
+    ampdata = [-1] * (len(xb.analog_samples ) -1)
 
 #store in arrays
     for i in range(len(voltagedata)):
         voltagedata[i] = xb.analog_samples[i+1][VOLTSENSE]
         ampdata[i] = xb.analog_samples[i+1][CURRENTSENSE]
 
-#normalising data
-    min_v = 1024 #xbee adc is 10 bits so max = 1023
+    min_v = 1024
     max_v = 0
+
+#normalising data
     for i in range(len(voltagedata)):
         if (min_v > voltagedata[i]):
             min_v = voltagedata[i]
@@ -75,12 +77,12 @@ def update_graph(idleevent):
 
 #average of min & max voltage
 
-    avg_v = (max_v + min_v) / 2
-    vpp = max_v-min_v #vpp
+    avgv = (max_v + min_v) / 2
+    vpp =  max_v-min_v
 
     for i in range(len(voltagedata)):
-    #remove dc bias
-        voltagedata[i] -= avg_v
+
+        voltagedata[i] -= avgv #remove DC Bias
         voltagedata[i] = (voltagedata[i] * MAINSVPP) / vpp
 
 #normailse current
@@ -93,8 +95,8 @@ def update_graph(idleevent):
 
         ampdata[i] /= CURRENTNORM
 
-    print "Voltage: ", voltagedata
-    print "Current: ", ampdata
+    #print "Voltage: ", voltagedata
+    #print "Current: ", ampdata
 
 #calculate power
 
@@ -118,12 +120,15 @@ def update_graph(idleevent):
     for i in range(17):
         avgwatt += abs(wattdata[i])
     avgwatt /= 17.0
-        
+
+    print str(xb.address_16)+"\tCurrent draw, in amperes: "+str(avgamp)
+    print "\tWatt draw, in VA: "+str(avgwatt)
+    
     if (avgamp > 13):
         return
 
     sensorhistory = sensorhistories.find(xb.address_16)
-    print sensorhistory
+    #print sensorhistory
 
     elapsedseconds = time.time() - sensorhistory.lasttime
     dwatthr = (avgwatt * elapsedseconds) / (60.0 * 60.0)  # 60 seconds in 60 minutes = 1 hr
@@ -145,7 +150,7 @@ def update_graph(idleevent):
                 whused += history.dayswatthr
         
         kwhused = whused/1000
-        avgwatt = (sensorhistory.avgwattover5min()-5.6)
+        avgwatt = (sensorhistory.avgwattover5min()-3)
         cost = kwhused * ENERGY_PRICE
         cost = "%.2f" % cost
 
