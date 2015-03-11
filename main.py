@@ -12,7 +12,7 @@ API_URL = "api.thingspeak.com:80" #API URL
 
 ENERGY_PRICE = 0.30 #needs to be set by user at later date (cost per kWh)
 
-LOG_FILE = "log_power.csv" # store data in logfile
+LOG_FILE = "log_" +str(datetime.today().year) + "_" +str(datetime.today().month)+ ".csv"
 
 SERIALPORT = "/dev/ttyUSB0" #USB Serial port -> XBEE
 BAUDRATE = 9600
@@ -27,6 +27,7 @@ vrefcalibration = [494,  #Voltage
                    493]  #etc
 CURRENTNORM = 15.5  # Amperes <- ADC
 
+currentmonth = datetime.today().month
 
 # open up the FTDI serial port to get data transmitted to xbee
 ser = serial.Serial(SERIALPORT, BAUDRATE)
@@ -46,8 +47,20 @@ print sensorhistories
 
 datarecieved = 0
 
+def new_logfile():
+    LOG_FILE = "log_" +str(datetime.today().year) + "_" +str(datetime.today().month)+ ".csv"
+    logfile = open(LOG_FILE, 'w+')
+    logfile.write("#Date, time, sensornum, avgWatts\n");
+    logfile.flush()
+    currentmonth = datetime.today().month
+
+
 def update_graph(idleevent):
-    global avgwattdataidx, sensorhistories, datarecieved
+    global avgwattdataidx, sensorhistories, datarecieved, currentmonth
+    
+    if ((datetime.today().month) != currentmonth):
+        new_logfile
+
 
 #get one packet from the xbee or timeout
     packet = xbee.find_packet(ser)
