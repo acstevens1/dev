@@ -14,7 +14,7 @@ ENERGY_PRICE = 0.30 #needs to be set by user at later date (cost per kWh)
 
 LOG_FILE = "log_power.csv" # store data in logfile
 
-SERIALPORT = "/dev/cu.usbserial-FTXKEMPL" #USB Serial port -> XBEE
+SERIALPORT = "/dev/ttyUSB0" #USB Serial port -> XBEE
 BAUDRATE = 9600
 CURRENTSENSE = 4
 VOLTSENSE = 0
@@ -30,7 +30,6 @@ CURRENTNORM = 15.5  # Amperes <- ADC
 
 # open up the FTDI serial port to get data transmitted to xbee
 ser = serial.Serial(SERIALPORT, BAUDRATE)
-ser.open()
 
 # open our datalogging file
 logfile = None
@@ -45,8 +44,10 @@ except IOError:
 sensorhistories = sensorhistory.SensorHistories(logfile)
 print sensorhistories
 
+datarecieved = 0
+
 def update_graph(idleevent):
-    global avgwattdataidx, sensorhistories
+    global avgwattdataidx, sensorhistories, datarecieved
 
 #get one packet from the xbee or timeout
     packet = xbee.find_packet(ser)
@@ -135,16 +136,16 @@ def update_graph(idleevent):
     sensorhistory.lasttime = time.time()
     print "\t\tWh used in last ",elapsedseconds," seconds: ",dwatthr
     sensorhistory.addwatthr(dwatthr)
+    datarecieved += 1
 
 # Determine the minute of the hour (ie 6:42 -> '42')
     currminute = (int(time.time())/60) % 10
     currentSecond= datetime.now().second
 
-    print currentSecond
-
-    if (currentSecond == 30) or (currentSecond == 29) or (currentSecond == 0) or (currentSecond == 1):
+    if (datarecieved == 15): #send to thingspeak every 15 data recieved
         wattsused = 0
         whused = 0
+	datarecieved = 0
         for history in sensorhistories.sensorhistories:
                 wattsused += history.avgwattover5min()
                 whused += history.dayswatthr
@@ -153,6 +154,10 @@ def update_graph(idleevent):
         avgwatt = (sensorhistory.avgwattover5min()-3)
         cost = kwhused * ENERGY_PRICE
         cost = "%.2f" % cost
+
+	if (avgwatt > 500):
+        	return
+
 
         params = urllib.urlencode({'field1': kwhused, 'field2': cost, 'field3':avgwatt, 'key': API_KEY})
         headers = {"content-type": "application/x-www-form-urlencoded","Accept": "text/plain"}
