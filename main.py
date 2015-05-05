@@ -10,7 +10,7 @@ from time import sleep, localtime, strftime
 API_KEY = "SBK6PW8UFZQ81MZR" #API Key for ThingSpeak
 API_URL = "api.thingspeak.com:80" #API URL
 
-ENERGY_PRICE = 0.30 #needs to be set by user at later date (cost per kWh)
+ENERGY_PRICE = 0.15 #needs to be set by user at later date (cost per kWh)
 
 LOG_FILE = "log_" +str(datetime.today().year) + "_" +str(datetime.today().month)+ ".csv"
 
@@ -164,7 +164,7 @@ def update_graph(idleevent):
                 whused += history.dayswatthr
         
         kwhused = whused/1000
-        avgwatt = (sensorhistory.avgwattover5min()-3)
+        avgwatt = (sensorhistory.avgwattover5min())/1000
         cost = kwhused * ENERGY_PRICE
         cost = "%.2f" % cost
 
